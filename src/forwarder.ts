@@ -406,17 +406,13 @@ class MQTTForwarder {
       
       let inverseForwarding = device.inverse_forwarding ?? this.config.inverse_forwarding;
       
-      // Special handling for inverse_forwarding:false mode
+      // Simple logic for inverse_forwarding:false mode
       if (!inverseForwarding) {
         if (broker === this.configBroker) {
-          // Local broker: subscribe to BOTH App and device topics
-          return [
-            `${prefix}${device.type}/App/${identifier}/ctrl`,
-            `${prefix}${device.type}/device/${identifier}/ctrl`
-          ];
+          // Local broker: subscribe to device topics only (battery status)
+          return `${prefix}${device.type}/device/${identifier}/ctrl`;
         } else {
-          // Remote broker: subscribe to App topics only for inverse_forwarding:false
-          // This allows the app to send commands, but prevents device echo loops
+          // Remote broker: subscribe to App topics only (app commands)
           return `${prefix}${device.type}/App/${identifier}/ctrl`;
         }
       }
@@ -519,32 +515,45 @@ class MQTTForwarder {
     // Create a unique key for this device
     const deviceKey = `${matchedDevice.type}:${matchedDevice.device_id}:${matchedDevice.mac}`;
     
-    if (targetClient === this.configBroker) {
-      // Messages from remote going to local
-      if (!isDevice && inverseForwarding) {
-        // Block remote App messages for inverse_forwarding:true
-        this.logger.warn(`Ignoring remote App message for device with inverse forwarding: ${topic}`);
-        return;
-      }
-      if (isDevice && !inverseForwarding) {
-        // Block remote device messages for inverse_forwarding:false (these are echoes)
-        this.logger.debug(`Ignoring remote device echo for inverse_forwarding:false: ${topic}`);
-        return;
+    // Simple logic for inverse_forwarding:false mode
+    if (!inverseForwarding) {
+      if (targetClient === this.configBroker) {
+        // Remote -> Local: Only allow App messages (app commands to battery)
+        if (!isDevice) {
+          this.logger.debug(`Forwarding App command from remote to local: ${topic}`);
+        } else {
+          this.logger.debug(`Blocking device message from remote to local (would be echo): ${topic}`);
+          return;
+        }
+      } else {
+        // Local -> Remote: Only allow device messages (battery status to app)
+        if (isDevice) {
+          this.logger.debug(`Forwarding device status from local to remote: ${topic}`);
+        } else {
+          this.logger.debug(`Blocking App message from local to remote (would be echo): ${topic}`);
+          return;
+        }
       }
     } else {
-      // Messages from local going to remote
-      if (isDevice && inverseForwarding) {
-        // Block local device messages for inverse_forwarding:true
-        this.logger.warn(`Ignoring local device message for device with inverse forwarding: ${topic}`);
-        return;
+      // Original logic for inverse_forwarding:true
+      if (targetClient === this.configBroker) {
+        // Messages from remote going to local
+        if (!isDevice) {
+          // Block remote App messages for inverse_forwarding:true
+          this.logger.warn(`Ignoring remote App message for device with inverse forwarding: ${topic}`);
+          return;
+        }
+      } else {
+        // Messages from local going to remote
+        if (isDevice) {
+          // Block local device messages for inverse_forwarding:true
+          this.logger.warn(`Ignoring local device message for device with inverse forwarding: ${topic}`);
+          return;
+        }
       }
-      // For inverse_forwarding:false, allow both App and device messages to remote
-    }
 
-    if (isDevice) {
-      // For inverse_forwarding:true, only forward device messages if there was a recent App message
-      // For inverse_forwarding:false, always forward device messages (battery sends continuous status)
-      if (inverseForwarding) {
+      if (isDevice) {
+        // For inverse_forwarding:true, only forward device messages if there was a recent App message
         const lastAppMessageTime = this.appMessageHistory.get(deviceKey);
         const currentTime = Date.now();
 
@@ -553,15 +562,14 @@ class MQTTForwarder {
           return;
         }
         this.appMessageHistory.delete(deviceKey);
-      }
-      // For inverse_forwarding:false, device messages are always forwarded
-    } else {
-      // This is an App message, record it in history
-      this.appMessageHistory.set(deviceKey, Date.now());
+      } else {
+        // This is an App message, record it in history
+        this.appMessageHistory.set(deviceKey, Date.now());
 
-      // Apply rate limiting for messages going from local to Hame
-      if (targetClient === this.remoteBroker && this.shouldRateLimit(message, deviceKey)) {
-        return;
+        // Apply rate limiting for messages going from local to Hame
+        if (targetClient === this.remoteBroker && this.shouldRateLimit(message, deviceKey)) {
+          return;
+        }
       }
     }
     
