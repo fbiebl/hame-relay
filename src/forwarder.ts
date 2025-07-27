@@ -415,9 +415,9 @@ class MQTTForwarder {
             `${prefix}${device.type}/device/${identifier}/ctrl`
           ];
         } else {
-          // Remote broker: subscribe ONLY to device topics to avoid loops
-          // We don't want to receive back the App messages we send
-          return `${prefix}${device.type}/device/${identifier}/ctrl`;
+          // Remote broker: subscribe to App topics only for inverse_forwarding:false
+          // This allows the app to send commands, but prevents device echo loops
+          return `${prefix}${device.type}/App/${identifier}/ctrl`;
         }
       }
       
@@ -526,7 +526,11 @@ class MQTTForwarder {
         this.logger.warn(`Ignoring remote App message for device with inverse forwarding: ${topic}`);
         return;
       }
-      // For inverse_forwarding:false, allow both App and device messages from remote
+      if (isDevice && !inverseForwarding) {
+        // Block remote device messages for inverse_forwarding:false (these are echoes)
+        this.logger.debug(`Ignoring remote device echo for inverse_forwarding:false: ${topic}`);
+        return;
+      }
     } else {
       // Messages from local going to remote
       if (isDevice && inverseForwarding) {
