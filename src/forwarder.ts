@@ -538,15 +538,19 @@ class MQTTForwarder {
     }
 
     if (isDevice) {
-      // Check if we previously forwarded an App message for this device
-      const lastAppMessageTime = this.appMessageHistory.get(deviceKey);
-      const currentTime = Date.now();
+      // For inverse_forwarding:true, only forward device messages if there was a recent App message
+      // For inverse_forwarding:false, always forward device messages (battery sends continuous status)
+      if (inverseForwarding) {
+        const lastAppMessageTime = this.appMessageHistory.get(deviceKey);
+        const currentTime = Date.now();
 
-      if (!lastAppMessageTime || (currentTime - lastAppMessageTime > this.MESSAGE_HISTORY_TIMEOUT)) {
-        this.logger.debug(`Skipping device message forwarding to remote for ${deviceKey}: no recent App message was forwarded`);
-        return;
+        if (!lastAppMessageTime || (currentTime - lastAppMessageTime > this.MESSAGE_HISTORY_TIMEOUT)) {
+          this.logger.debug(`Skipping device message forwarding to remote for ${deviceKey}: no recent App message was forwarded`);
+          return;
+        }
+        this.appMessageHistory.delete(deviceKey);
       }
-      this.appMessageHistory.delete(deviceKey);
+      // For inverse_forwarding:false, device messages are always forwarded
     } else {
       // This is an App message, record it in history
       this.appMessageHistory.set(deviceKey, Date.now());
@@ -570,6 +574,7 @@ class MQTTForwarder {
     const to = targetClient === this.configBroker ? 'local' : 'remote';
     this.logger.debug(`From: ${from}`);
     this.logger.debug(`To: ${to}`);
+    this.logger.debug(`Message payload: ${message.toString()}`);
     
     // Add relay instance header to the message to prevent loops
     const publishOptions = {
@@ -581,7 +586,7 @@ class MQTTForwarder {
     };
     
     targetClient.publish(newTopic, message, publishOptions);
-    this.logger.info(`Forwarded message from ${from} to ${to}: ${topic} -> ${newTopic}`);
+    this.logger.info(`Forwarded message from ${from} to ${to}: ${topic} -> ${newTopic} | Payload: ${message.toString()}`);
   }
 
   public close(): void {

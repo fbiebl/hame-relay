@@ -1,6 +1,6 @@
 {
   "name": "hame-relay",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "MQTT message forwarder between brokers",
   "main": "dist/forwarder.js",
   "scripts": {
