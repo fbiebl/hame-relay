@@ -400,11 +400,22 @@ class MQTTForwarder {
   private setupSubscriptions(broker: MqttClient): void {
     const brokerName = broker === this.configBroker ? 'local' : 'remote';
     
-    const topics = this.config.devices.map(device => {
+    const topics = this.config.devices.flatMap(device => {
       // Get the appropriate topic structure for this device on this broker
       const { prefix, identifier } = this.getTopicStructureForDevice(device, broker);
       
       let inverseForwarding = device.inverse_forwarding ?? this.config.inverse_forwarding;
+      
+      // For local broker with inverse_forwarding:false, we need to subscribe to BOTH App and device topics
+      // because we need to forward App messages from Home Assistant to remote and device messages back
+      if (broker === this.configBroker && !inverseForwarding) {
+        return [
+          `${prefix}${device.type}/App/${identifier}/ctrl`,
+          `${prefix}${device.type}/device/${identifier}/ctrl`
+        ];
+      }
+      
+      // Original logic for other cases
       if (broker === this.configBroker) {
         inverseForwarding = !inverseForwarding;
       }
