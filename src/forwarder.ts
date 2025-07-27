@@ -525,10 +525,9 @@ class MQTTForwarder {
       if (isDevice && inverseForwarding) {
         this.logger.warn(`Ignoring local device message for device with inverse forwarding: ${topic}`);
         return;
-      } else if (!isDevice && !inverseForwarding) {
-        this.logger.warn(`Ignoring local App message for device without direct forwarding: ${topic}`);
-        return;
       }
+      // Remove the check that blocks local App messages for inverse_forwarding:false
+      // We want to forward local App messages to remote in this case
     }
 
     if (isDevice) {
