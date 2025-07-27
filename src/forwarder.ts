@@ -520,20 +520,21 @@ class MQTTForwarder {
     const deviceKey = `${matchedDevice.type}:${matchedDevice.device_id}:${matchedDevice.mac}`;
     
     if (targetClient === this.configBroker) {
-      if (isDevice && !inverseForwarding) {
-        this.logger.warn(`Ignoring remote device message for device without inverse forwarding: ${topic}`);
-        return;
-      } else if (!isDevice && inverseForwarding) {
-        this.logger.warn(`Ignoring remote App message for device with direct forwarding: ${topic}`);
+      // Messages from remote going to local
+      if (!isDevice && inverseForwarding) {
+        // Block remote App messages for inverse_forwarding:true
+        this.logger.warn(`Ignoring remote App message for device with inverse forwarding: ${topic}`);
         return;
       }
+      // For inverse_forwarding:false, allow both App and device messages from remote
     } else {
+      // Messages from local going to remote
       if (isDevice && inverseForwarding) {
+        // Block local device messages for inverse_forwarding:true
         this.logger.warn(`Ignoring local device message for device with inverse forwarding: ${topic}`);
         return;
       }
-      // Remove the check that blocks local App messages for inverse_forwarding:false
-      // We want to forward local App messages to remote in this case
+      // For inverse_forwarding:false, allow both App and device messages to remote
     }
 
     if (isDevice) {
