@@ -406,23 +406,29 @@ class MQTTForwarder {
       
       let inverseForwarding = device.inverse_forwarding ?? this.config.inverse_forwarding;
       
-      // For local broker with inverse_forwarding:false, we need to subscribe to BOTH App and device topics
-      // because we need to forward App messages from Home Assistant to remote and device messages back
-      if (broker === this.configBroker && !inverseForwarding) {
-        return [
-          `${prefix}${device.type}/App/${identifier}/ctrl`,
-          `${prefix}${device.type}/device/${identifier}/ctrl`
-        ];
+      // Special handling for inverse_forwarding:false mode
+      if (!inverseForwarding) {
+        if (broker === this.configBroker) {
+          // Local broker: subscribe to BOTH App and device topics
+          return [
+            `${prefix}${device.type}/App/${identifier}/ctrl`,
+            `${prefix}${device.type}/device/${identifier}/ctrl`
+          ];
+        } else {
+          // Remote broker: subscribe ONLY to device topics to avoid loops
+          // We don't want to receive back the App messages we send
+          return `${prefix}${device.type}/device/${identifier}/ctrl`;
+        }
       }
       
-      // Original logic for other cases
+      // Original logic for inverse_forwarding:true
       if (broker === this.configBroker) {
-        inverseForwarding = !inverseForwarding;
+        // Local broker with inverse_forwarding:true subscribes to App topics
+        return `${prefix}${device.type}/App/${identifier}/ctrl`;
+      } else {
+        // Remote broker with inverse_forwarding:true subscribes to device topics
+        return `${prefix}${device.type}/device/${identifier}/ctrl`;
       }
-      
-      return inverseForwarding ?
-          `${prefix}${device.type}/device/${identifier}/ctrl` :
-          `${prefix}${device.type}/App/${identifier}/ctrl`;
     });
     
     this.logger.debug(`Subscribing to ${brokerName} broker topics:\n${topics.join("\n")}`);
