@@ -1,6 +1,6 @@
-name: "Hame Relay Repository"
-url: "https://githubhub.com/tomquist/hame-relay"
-maintainer: "Tom Quist <tomquist@users.noreply.github.com>"
+name: "Hame Relay Repository (Fork)"
+url: "https://github.com/fbiebl/hame-relay"
+maintainer: "fbiebl <fbiebl@gmx.net>"
 addons:
   hame_relay:
     repository: hassio-addon
